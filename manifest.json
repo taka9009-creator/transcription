@@ -1,0 +1,19 @@
+{
+  "name": "スマート領収書・PDFスタジオ",
+  "short_name": "領収書PDF",
+  "description": "スマホで撮影した領収書を瞬時に高画質PDF化。結合・並べ替え・分割・抽出・回転・削除が完全オフラインで完結するWebアプリ",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "finance", "productivity", "utilities"]
+}

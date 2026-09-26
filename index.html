@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>スマート領収書・PDFスタジオ | Receipt & PDF Studio</title>
+  <!-- PWA & モバイル対応メタタグ (出先・オフライン対応) -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="領収書PDF">
+  <meta name="theme-color" content="#2563eb">
+
+  <link rel="stylesheet" href="css/style.css">
+  
+  <!-- PDFエンジン: 完全オフライン対応 (ローカルvendor優先、CDNフォールバック) -->
+  <script src="vendor/pdf-lib.min.js"></script>
+  <script>
+    if (!window.PDFLib) {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"><\/script>');
+    }
+  </script>
+  <!-- PDFプレビュー・レンダラー: pdf.js -->
+  <script src="vendor/pdf.min.js"></script>
+  <script>
+    if (!window.pdfjsLib) {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"><\/script>');
+    }
+  </script>
+</head>
+<body>
+
+  <!-- アプリヘッダー -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span style="font-size: 1.6rem;">🧾</span>
+        <h1>領収書・PDFスタジオ</h1>
+        <button type="button" class="btn btn-outline" id="btnShowInstallGuide" style="padding: 4px 10px; font-size: 0.8rem; min-height: 36px;">
+          📱 出先・スマホでの使い方
+        </button>
+      </div>
+
+      <div class="doc-info">
+        <input type="text" id="docTitleInput" value="領収書まとめ_2026" placeholder="PDFのファイル名" title="PDFの保存ファイル名">
+        <span id="pageCountBadge" class="page-badge">0 ページ</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- メインコンテンツ -->
+  <main class="app-container">
+
+    <!-- 取り込みセクション (ドロップゾーン & カメラ/ファイル選択) -->
+    <section class="import-card" id="dropZone">
+      <div class="import-actions">
+        <!-- 📸 スマホカメラで直接撮影 (capture="environment" で背面カメラ起動) -->
+        <button type="button" class="btn btn-primary" id="btnCamera">
+          <span style="font-size: 1.2rem;">📸</span> 領収書をカメラで撮る
+        </button>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden">
+
+        <!-- 🖼️ 写真アルバムから複数選択 -->
+        <button type="button" class="btn btn-outline" id="btnSelectImage">
+          <span style="font-size: 1.2rem;">🖼️</span> 写真・画像を選ぶ
+        </button>
+        <input type="file" id="imageInput" accept="image/*" multiple class="hidden">
+
+        <!-- 📄 既存のPDFファイルを追加 -->
+        <button type="button" class="btn btn-outline" id="btnSelectPdf">
+          <span style="font-size: 1.2rem;">📄</span> 既存PDFを追加
+        </button>
+        <input type="file" id="pdfInput" accept="application/pdf" multiple class="hidden">
+      </div>
+      <p class="drop-hint">またはここに画像・PDFファイルをドラッグ＆ドロップしてください</p>
+    </section>
+
+    <!-- 一括操作アクションバー (ページ選択時に表示) -->
+    <section class="bulk-bar hidden" id="bulkActionBar">
+      <div class="bulk-left">
+        <span id="selectedCountText">0 件選択中</span>
+      </div>
+      <div class="bulk-right">
+        <button type="button" class="btn btn-outline" id="btnSelectAll">全選択</button>
+        <button type="button" class="btn btn-outline" id="btnDeselectAll">選択解除</button>
+        <button type="button" class="btn btn-outline" id="btnRotateSelected">🔄 90°回転</button>
+        <button type="button" class="btn btn-success" id="btnExtractSelected">📥 選択ページを抽出保存</button>
+        <button type="button" class="btn btn-danger" id="btnDeleteSelected">🗑️ 削除</button>
+      </div>
+    </section>
+
+    <!-- ページ一覧ワークスペース -->
+    <section>
+      <!-- 空状態プレースホルダー -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-state-icon">📂</div>
+        <h3>まだページが読み込まれていません</h3>
+        <p>上部の「領収書をカメラで撮る」またはファイル選択から書類を追加してください。</p>
+      </div>
+
+      <!-- サムネイルグリッド -->
+      <div class="workspace-grid hidden" id="workspaceGrid"></div>
+    </section>
+
+  </main>
+
+  <!-- フッター固定アクションバー (スマホで片手操作できるボトムバー) -->
+  <footer class="bottom-action-bar">
+    <div class="bottom-action-inner">
+      <button type="button" class="btn btn-outline" id="btnClearAll" title="ワークスペースを空にする">
+        🗑️ 全クリア
+      </button>
+      
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <!-- 分割ボタン -->
+        <button type="button" class="btn btn-outline" id="btnSplitPdf" disabled>
+          ✂️ PDFを分割
+        </button>
+        <!-- メイン出力ボタン -->
+        <button type="button" class="btn btn-primary" id="btnExportPdf" disabled>
+          📑 まとめてPDF結合・書き出し
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==========================================
+       モーダル: 領収書画像補正 (レシートスキャナー)
+       ========================================== -->
+  <div class="modal-backdrop hidden" id="enhanceModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>✨ 領収書の画質補正 (レシートスキャン)</h3>
+        <button type="button" class="icon-btn" id="btnEnhanceCancel">✖</button>
+      </div>
+      <div class="modal-body">
+        <div class="enhance-preview-box">
+          <canvas id="enhanceCanvas"></canvas>
+        </div>
+
+        <div class="filter-controls">
+          <div>
+            <label style="font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; display: block;">仕上がりモード</label>
+            <div class="preset-radio-group">
+              <label class="preset-label">
+                <input type="radio" name="enhancePreset" value="receipt_bw" checked>
+                <span>🧾 レシートくっきり白黒</span>
+              </label>
+              <label class="preset-label">
+                <input type="radio" name="enhancePreset" value="high_contrast">
+                <span>📈 高コントラスト (印鑑カラー)</span>
+              </label>
+              <label class="preset-label">
+                <input type="radio" name="enhancePreset" value="grayscale">
+                <span>🎨 グレースケール</span>
+              </label>
+              <label class="preset-label">
+                <input type="radio" name="enhancePreset" value="original">
+                <span>📷 原本カラーそのまま</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-header">
+              <span>明るさ補正</span>
+              <span id="valBrightness">0</span>
+            </div>
+            <input type="range" id="enhanceBrightness" min="-80" max="80" value="0">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-header">
+              <span>コントラスト補正</span>
+              <span id="valContrast">20</span>
+            </div>
+            <input type="range" id="enhanceContrast" min="-50" max="80" value="20">
+          </div>
+
+          <button type="button" class="btn btn-outline" id="btnEnhanceRotate" style="width: 100%;">
+            🔄 写真を90度回転
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-success" id="btnEnhanceApply">この補正を適用</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       モーダル: PDF分割
+       ========================================== -->
+  <div class="modal-backdrop hidden" id="splitModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>✂️ PDFの分割出力</h3>
+        <button type="button" class="icon-btn" id="btnCancelSplit">✖</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-sub); font-size: 0.9rem; margin-bottom: 12px;">
+          分割したいページの横にある「✂️ ここで前後に分割」を押すか、全ページを1枚ずつ個別に出力できます。
+        </p>
+        <div id="splitPreviewList" style="border: 1px solid var(--border); border-radius: var(--radius-sm); max-height: 280px; overflow-y: auto;">
+          <!-- ページ行が動的に生成されます -->
+        </div>
+
+        <div style="margin-top: 20px; padding: 12px; background: #f8fafc; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+          <h4 style="font-size: 0.95rem; margin-bottom: 8px;">一括バラバラ出力</h4>
+          <button type="button" class="btn btn-outline" id="btnConfirmSplitAll" style="width: 100%;">
+            📦 全ページを1ページずつ個別のPDFとしてダウンロード
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="btnCancelSplit">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       モーダル: PDFプレビュー & ダウンロード
+       ========================================== -->
+  <div class="modal-backdrop hidden" id="exportModal">
+    <div class="modal-dialog" style="max-width: 720px;">
+      <div class="modal-header">
+        <h3>📑 完成PDFのプレビュー & ダウンロード</h3>
+        <button type="button" class="icon-btn" id="btnCloseExportModal">✖</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <label style="font-weight: 600; font-size: 0.9rem;">用紙サイズ配置:</label>
+          <select id="exportPageSizeSelect" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px;">
+            <option value="fit">原本サイズに合わせる (領収書実寸・縦長に最適)</option>
+            <option value="a4">A4用紙の中央に配置 (印刷・提出用)</option>
+          </select>
+        </div>
+
+        <iframe id="exportPdfFrame" class="pdf-preview-frame"></iframe>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="btnCloseExportModal">編集を続ける</button>
+        <button type="button" class="btn btn-success" id="btnDownloadPdf">
+          💾 PDFをダウンロード保存
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ローディングオーバーレイ -->
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div id="loadingText" style="font-weight: 600; font-size: 1.05rem;">処理中...</div>
+  </div>
+
+  <!-- トースト通知コンテナ -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- ==========================================
+       モーダル: 出先・スマホでの使い方ガイド
+       ========================================== -->
+  <div class="modal-backdrop hidden" id="installGuideModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>📱 出先やスマホで快適に使う方法</h3>
+        <button type="button" class="icon-btn" id="btnCloseInstallGuide">✖</button>
+      </div>
+      <div class="modal-body" style="font-size: 0.95rem; line-height: 1.6;">
+        <h4 style="color: var(--primary); margin-bottom: 8px;">💡 ホーム画面に追加してアプリ化（推奨）</h4>
+        <p style="margin-bottom: 12px; color: var(--text-sub);">
+          ホーム画面に追加すると、URLバーが消えて本物のアプリのように全画面で起動でき、電波の届かないオフライン環境でも動作します。
+        </p>
+
+        <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 12px;">
+          <strong>🍎 iPhone (Safari) の場合:</strong>
+          <ol style="padding-left: 20px; margin-top: 6px;">
+            <li>画面下の <strong>「共有ボタン（四角から上矢印）」</strong> をタップ</li>
+            <li>メニューから <strong>「ホーム画面に追加」</strong> を選択</li>
+            <li>右上の「追加」を押すと、ホーム画面にアプリアイコンが作成されます！</li>
+          </ol>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 12px;">
+          <strong>🤖 Android (Chrome) の場合:</strong>
+          <ol style="padding-left: 20px; margin-top: 6px;">
+            <li>右上の <strong>「︙（メニュー）」</strong> をタップ</li>
+            <li><strong>「アプリをインストール」</strong> または <strong>「ホーム画面に追加」</strong> を選択</li>
+          </ol>
+        </div>
+
+        <h4 style="color: var(--emerald); margin-top: 16px; margin-bottom: 8px;">🌐 出先からいつでもアクセスする3つの方法</h4>
+        <ul style="padding-left: 20px; color: var(--text-sub);">
+          <li><strong>GitHub Pages / Vercel</strong>: 無料で自分専用のHTTPSアドレス（`https://xxx.github.io/...`）を公開可能</li>
+          <li><strong>スマホ保存</strong>: 一度ブラウザで開いてホーム画面に追加すれば、オフライン時も開いて撮影・PDF化できます</li>
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="btnOkInstallGuide">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- アプリケーションスクリプト -->
+  <script src="js/image-enhancer.js"></script>
+  <script src="js/pdf-engine.js"></script>
+  <script src="js/app.js"></script>
+
+  <!-- Service Worker 登録 (完全オフラインPWA化) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then((reg) => console.log('PWA ServiceWorker 登録成功:', reg.scope))
+          .catch((err) => console.warn('PWA ServiceWorker 登録スキップ/エラー:', err));
+      });
+    }
+
+    // ガイドモーダルの開閉
+    const modalGuide = document.getElementById('installGuideModal');
+    const btnOpenGuide = document.getElementById('btnShowInstallGuide');
+    const btnCloseGuide = document.getElementById('btnCloseInstallGuide');
+    const btnOkGuide = document.getElementById('btnOkInstallGuide');
+
+    if (btnOpenGuide && modalGuide) {
+      btnOpenGuide.addEventListener('click', () => modalGuide.classList.remove('hidden'));
+      btnCloseGuide.addEventListener('click', () => modalGuide.classList.add('hidden'));
+      btnOkGuide.addEventListener('click', () => modalGuide.classList.add('hidden'));
+    }
+  </script>
+</body>
+</html>
