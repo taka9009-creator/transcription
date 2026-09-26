@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSelectAll: document.getElementById('btnSelectAll'),
     btnDeselectAll: document.getElementById('btnDeselectAll'),
     btnRotateSelected: document.getElementById('btnRotateSelected'),
+    btnShareSelected: document.getElementById('btnShareSelected'),
     btnExtractSelected: document.getElementById('btnExtractSelected'),
     btnDeleteSelected: document.getElementById('btnDeleteSelected'),
 
@@ -70,7 +71,19 @@ document.addEventListener('DOMContentLoaded', () => {
     exportPdfFrame: document.getElementById('exportPdfFrame'),
     exportPageSizeSelect: document.getElementById('exportPageSizeSelect'),
     btnDownloadPdf: document.getElementById('btnDownloadPdf'),
+    btnOpenShareModal: document.getElementById('btnOpenShareModal'),
     btnCloseExportModal: document.getElementById('btnCloseExportModal'),
+
+    // 共有モーダル
+    shareModal: document.getElementById('shareModal'),
+    btnCloseShareModal: document.getElementById('btnCloseShareModal'),
+    btnCancelShareModal: document.getElementById('btnCancelShareModal'),
+    btnNativeShare: document.getElementById('btnNativeShare'),
+    btnShareGmail: document.getElementById('btnShareGmail'),
+    btnCopyChatworkText: document.getElementById('btnCopyChatworkText'),
+    btnOpenChatwork: document.getElementById('btnOpenChatwork'),
+    btnOpenGoogleDrive: document.getElementById('btnOpenGoogleDrive'),
+    webShareSection: document.getElementById('webShareSection'),
 
     // ローディング & トースト
     loadingOverlay: document.getElementById('loadingOverlay'),
@@ -633,6 +646,137 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(`抽出エラー: ${err.message}`, 'error');
     } finally {
       setLoading(false);
+    }
+  });
+
+  // ==========================================
+  // 共有・送信処理 (Web Share API, Gmail, Chatwork, Google Drive)
+  // ==========================================
+
+  let currentShareTarget = {
+    blob: null,
+    title: '領収書まとめ.pdf',
+    pageCount: 1
+  };
+
+  function openShareDialog(blob, title, pageCount) {
+    currentShareTarget = { blob, title, pageCount };
+
+    // Web Share API のファイル共有対応確認
+    if (navigator.share) {
+      elements.webShareSection.classList.remove('hidden');
+    } else {
+      elements.webShareSection.classList.add('hidden');
+    }
+
+    elements.shareModal.classList.remove('hidden');
+  }
+
+  // プレビューモーダル内の「共有」ボタン
+  elements.btnOpenShareModal.addEventListener('click', () => {
+    if (!currentExportBlob) return;
+    const title = (elements.docTitleInput.value.trim() || '領収書まとめ') + '.pdf';
+    openShareDialog(currentExportBlob, title, state.pages.length);
+  });
+
+  // 一括バーの「選択分を共有」ボタン
+  elements.btnShareSelected.addEventListener('click', async () => {
+    if (state.selectedIds.size === 0) return;
+    setLoading(true, '選択ページをPDF化して共有準備中...');
+
+    try {
+      const pageSize = elements.exportPageSizeSelect.value;
+      const pdfBytes = await state.pdfEngine.extractPages(
+        state.pages,
+        Array.from(state.selectedIds),
+        { pageSize }
+      );
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const title = `${elements.docTitleInput.value.trim() || '領収書'}_抽出_${state.selectedIds.size}枚.pdf`;
+      openShareDialog(blob, title, state.selectedIds.size);
+    } catch (err) {
+      console.error(err);
+      showToast(`共有準備エラー: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  // モーダル閉じる
+  elements.btnCloseShareModal.addEventListener('click', () => elements.shareModal.classList.add('hidden'));
+  elements.btnCancelShareModal.addEventListener('click', () => elements.shareModal.classList.add('hidden'));
+
+  // 1. スマホネイティブ共有 (Web Share API - Gmail/Chatwork/Drive等へ直接添付)
+  elements.btnNativeShare.addEventListener('click', async () => {
+    if (!currentShareTarget.blob) return;
+
+    try {
+      const file = new File([currentShareTarget.blob], currentShareTarget.title, { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: currentShareTarget.title,
+          text: `領収書PDF（${currentShareTarget.title}）を送付します。`
+        });
+        showToast('共有が完了しました！', 'success');
+      } else if (navigator.share) {
+        await navigator.share({
+          title: currentShareTarget.title,
+          text: `領収書PDF（${currentShareTarget.title}）を作成しました。`
+        });
+      } else {
+        showToast('お使いのブラウザはネイティブ共有に対応していません', 'warning');
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error(err);
+        showToast('共有がキャンセルまたは失敗しました', 'info');
+      }
+    }
+  });
+
+  // 2. Gmail作成画面
+  elements.btnShareGmail.addEventListener('click', () => {
+    const subject = `【領収書PDF提出】${currentShareTarget.title}`;
+    const body = `ご担当者様\n\nお疲れ様です。\n領収書（全${currentShareTarget.pageCount}枚）のPDFを作成いたしました。\n\nドキュメント名: ${currentShareTarget.title}\n作成日: ${new Date().toLocaleDateString('ja-JP')}\n\nPDFファイルをダウンロード・添付の上、ご確認のほどよろしくお願いいたします。`;
+
+    // Gmail Web作成URL
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&tf=1&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(gmailUrl, '_blank');
+
+    // PDFダウンロードも同時に実行
+    if (currentShareTarget.blob) {
+      downloadBlob(currentShareTarget.blob, currentShareTarget.title);
+      showToast('Gmailを開きました！ダウンロードされたPDFを添付してください', 'success');
+    }
+  });
+
+  // 3. Chatwork報告文コピー & 起動
+  elements.btnCopyChatworkText.addEventListener('click', async () => {
+    const chatworkText = `[info][title]領収書PDF提出[/title]お疲れ様です。\n領収書PDF（全${currentShareTarget.pageCount}枚）を作成しました。\nファイル名: ${currentShareTarget.title}\n作成日: ${new Date().toLocaleDateString('ja-JP')}\n添付ファイルのご確認よろしくお願いいたします。[/info]`;
+
+    try {
+      await navigator.clipboard.writeText(chatworkText);
+      showToast('Chatwork用の提出文をクリップボードにコピーしました！', 'success');
+    } catch (err) {
+      showToast('テキストのコピーに失敗しました', 'error');
+    }
+  });
+
+  elements.btnOpenChatwork.addEventListener('click', () => {
+    window.open('https://www.chatwork.com/', '_blank');
+    if (currentShareTarget.blob) {
+      downloadBlob(currentShareTarget.blob, currentShareTarget.title);
+      showToast('Chatworkを開きました！PDFをドラッグして送信してください', 'info');
+    }
+  });
+
+  // 4. Google Drive
+  elements.btnOpenGoogleDrive.addEventListener('click', () => {
+    window.open('https://drive.google.com/drive/my-drive', '_blank');
+    if (currentShareTarget.blob) {
+      downloadBlob(currentShareTarget.blob, currentShareTarget.title);
+      showToast('Googleドライブを開きました！PDFをドラッグして保存してください', 'info');
     }
   });
 

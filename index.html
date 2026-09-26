@@ -86,6 +86,7 @@
         <button type="button" class="btn btn-outline" id="btnSelectAll">全選択</button>
         <button type="button" class="btn btn-outline" id="btnDeselectAll">選択解除</button>
         <button type="button" class="btn btn-outline" id="btnRotateSelected">🔄 90°回転</button>
+        <button type="button" class="btn btn-primary" id="btnShareSelected">📤 選択分を共有</button>
         <button type="button" class="btn btn-success" id="btnExtractSelected">📥 選択ページを抽出保存</button>
         <button type="button" class="btn btn-danger" id="btnDeleteSelected">🗑️ 削除</button>
       </div>
@@ -240,11 +241,103 @@
 
         <iframe id="exportPdfFrame" class="pdf-preview-frame"></iframe>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer" style="flex-wrap: wrap; justify-content: space-between;">
         <button type="button" class="btn btn-outline" id="btnCloseExportModal">編集を続ける</button>
-        <button type="button" class="btn btn-success" id="btnDownloadPdf">
-          💾 PDFをダウンロード保存
-        </button>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary" id="btnOpenShareModal">
+            📤 共有・送信 (Gmail / Chatwork / Drive)
+          </button>
+          <button type="button" class="btn btn-success" id="btnDownloadPdf">
+            💾 PDFダウンロード保存
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       モーダル: 共有・送信 (Gmail / Chatwork / Google Drive)
+       ========================================== -->
+  <div class="modal-backdrop hidden" id="shareModal">
+    <div class="modal-dialog" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3>📤 領収書PDFの共有・送信</h3>
+        <button type="button" class="icon-btn" id="btnCloseShareModal">✖</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-sub); font-size: 0.9rem; margin-bottom: 16px;">
+          作成したPDFをメール、チャットワーク、またはGoogleドライブへ簡単に送信・保存できます。
+        </p>
+
+        <!-- ① スマホ標準共有 (Web Share API: ファイル直接添付) -->
+        <div class="share-card primary-share" id="webShareSection">
+          <div class="share-header">
+            <span style="font-size: 1.5rem;">📲</span>
+            <div>
+              <strong>スマホアプリで直接共有 (推奨)</strong>
+              <p class="share-desc">Gmail、Chatwork、Google Drive、LINE等へファイルを直接渡せます</p>
+            </div>
+          </div>
+          <button type="button" class="btn btn-primary" id="btnNativeShare" style="width: 100%; margin-top: 8px;">
+            📲 スマホの共有メニューを開く
+          </button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 14px;">
+          <!-- ② Gmail連携 -->
+          <div class="share-card">
+            <div class="share-header">
+              <span style="font-size: 1.4rem;">✉️</span>
+              <div>
+                <strong>Gmail で送信</strong>
+                <p class="share-desc">件名と提出用本文を自動入力して作成画面を開きます</p>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <button type="button" class="btn btn-outline" id="btnShareGmail" style="flex: 1;">
+                ✉️ Gmail 作成画面を開く
+              </button>
+            </div>
+          </div>
+
+          <!-- ③ Chatwork連携 -->
+          <div class="share-card">
+            <div class="share-header">
+              <span style="font-size: 1.4rem;">💬</span>
+              <div>
+                <strong>Chatwork で共有</strong>
+                <p class="share-desc">Chatwork用の提出枠テキスト（[info]タグ）を自動作成</p>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+              <button type="button" class="btn btn-outline" id="btnCopyChatworkText" style="flex: 1; min-width: 180px;">
+                📋 報告文をコピー
+              </button>
+              <button type="button" class="btn btn-outline" id="btnOpenChatwork" style="flex: 1; min-width: 140px;">
+                💬 Chatworkを開く
+              </button>
+            </div>
+          </div>
+
+          <!-- ④ Google Drive連携 -->
+          <div class="share-card">
+            <div class="share-header">
+              <span style="font-size: 1.4rem;">📁</span>
+              <div>
+                <strong>Google Drive に保存</strong>
+                <p class="share-desc">マイドライブを開いてドラッグ＆ドロップで保存</p>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <button type="button" class="btn btn-outline" id="btnOpenGoogleDrive" style="flex: 1;">
+                📁 Google Drive を開く
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="btnCancelShareModal">閉じる</button>
       </div>
     </div>
   </div>

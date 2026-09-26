@@ -687,6 +687,38 @@ button, input, select {
 }
 
 /* ==========================================================================
+   共有カードコンポーネント (Gmail / Chatwork / Drive / Web Share)
+   ========================================================================== */
+
+.share-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.15s ease;
+}
+.share-card:hover {
+  border-color: #94a3b8;
+  box-shadow: var(--shadow-sm);
+}
+.share-card.primary-share {
+  background: linear-gradient(to right, #eff6ff, #f0fdf4);
+  border-color: #bfdbfe;
+}
+.share-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.share-desc {
+  font-size: 0.85rem;
+  color: var(--text-sub);
+  margin-top: 2px;
+}
+
+/* ==========================================================================
    モバイルレスポンシブ最適化 (375px〜640px)
    ========================================================================== */
 @media (max-width: 640px) {
